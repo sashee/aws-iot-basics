@@ -7,13 +7,14 @@ import { IoTDataPlaneClient, UpdateThingShadowCommand } from "@aws-sdk/client-io
 
 export const handler = async (event) => {
 	console.log(JSON.stringify(event, undefined, 4));
+	const {thingName, shadowName, current} = event;
 	return new IoTDataPlaneClient().send(new UpdateThingShadowCommand({
-		shadowName: "test",
-		thingName: process.env.THING_NAME,
+		shadowName,
+		thingName,
 		payload: Buffer.from(JSON.stringify({
 			state: {
 				desired: {
-					value: "Echo: " + event.current.state.reported.value,
+					value: "Echo: " + current.state.reported.value,
 				}
 			}
 		}))
@@ -33,11 +34,6 @@ resource "aws_lambda_function" "lambda" {
   handler = "main.handler"
   runtime = "nodejs18.x"
   role    = aws_iam_role.lambda_exec.arn
-  environment {
-    variables = {
-      THING_NAME = aws_iot_thing.thing.name
-    }
-  }
 }
 
 resource "aws_cloudwatch_log_group" "loggroup_inline" {
@@ -97,7 +93,7 @@ resource "aws_lambda_permission" "rule" {
 resource "aws_iot_topic_rule" "rule" {
   name        = "test_${random_id.id.hex}"
   enabled     = true
-  sql         = "SELECT * FROM '$aws/things/+/shadow/name/+/update/documents' WHERE isNull(previous) OR previous.state.reported.value <> current.state.reported.value"
+  sql         = "SELECT current, topic(3) as thingName, topic(6) as shadowName FROM '$aws/things/+/shadow/name/+/update/documents' WHERE isNull(previous) OR previous.state.reported.value <> current.state.reported.value"
   sql_version = "2016-03-23"
 
 	lambda {
